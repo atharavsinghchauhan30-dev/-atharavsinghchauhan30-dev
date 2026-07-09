@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HourWheel — Time Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --void:#14161B;
+    --surface:#1B1E25;
+    --surface-2:#242832;
+    --surface-3:#2E323D;
+    --line:#33384433;
+    --text:#EDEEF0;
+    --text-dim:#9296A0;
+    --text-faint:#5C6270;
+    --gold:#E8B34D;
+    --gold-dim:#7A6535;
+
+    --c-work:#E8B34D;
+    --c-study:#6FA8E8;
+    --c-health:#6FCF97;
+    --c-sleep:#8C7AE6;
+    --c-chores:#E0956F;
+    --c-social:#4DB6AC;
+    --c-fun:#E06F9B;
+    --c-other:#6B7080;
+    --c-empty:#2A2E38;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#0F1015;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    transition:background 1.2s ease;
+  }
+  #bgCanvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+  #bgGradient{position:fixed;inset:0;z-index:0;pointer-events:none;transition:background 1.2s ease;opacity:0.9;}
+  .app{max-width:960px;margin:0 auto;padding:28px 20px 80px;position:relative;z-index:1;}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px;}
+  .brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-0.02em;}
+  .brand span{color:var(--gold);}
+  .topbar-right{display:flex;align-items:center;gap:14px;}
+  .digital-time{font-family:'Space Grotesk',sans-serif;font-size:14px;color:var(--text-dim);letter-spacing:0.04em;font-variant-numeric:tabular-nums;}
+  .vibe-btn{
+    background:rgba(36,40,50,0.65);border:1px solid var(--line);color:var(--text-dim);
+    font-size:12px;padding:7px 12px;border-radius:20px;cursor:pointer;font-family:'Inter';
+    display:flex;align-items:center;gap:6px;backdrop-filter:blur(8px);
+    transition:background .2s ease, color .2s ease, transform .15s ease;
+  }
+  .vibe-btn:hover{background:rgba(46,50,61,0.85);color:var(--text);}
+  .vibe-btn:active{transform:scale(0.95);}
+  .vibe-label{font-size:11px;color:var(--text-faint);letter-spacing:.02em;}
+
+  .hero{
+    display:flex;gap:32px;align-items:center;flex-wrap:wrap;
+    background:rgba(27,30,37,0.66);
+    backdrop-filter:blur(14px);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:26px 30px;
+    margin-bottom:26px;
+    transition:background 1.2s ease;
+  }
+  .clock-wrap{position:relative;width:210px;height:210px;flex-shrink:0;}
+  .clock-wrap svg{width:100%;height:100%;overflow:visible;}
+  .hand{stroke-linecap:round;transform-origin:150px 150px;}
+  .hand.hour{stroke:var(--text);stroke-width:5;}
+  .hand.minute{stroke:var(--text-dim);stroke-width:3.5;}
+  .hand.second{stroke:var(--gold);stroke-width:1.6;}
+  .hub{fill:var(--gold);}
+
+  .day-summary{flex:1;min-width:240px;}
+  .day-summary .date-label{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;margin-bottom:4px;}
+  .day-summary .date-sub{color:var(--text-dim);font-size:13px;margin-bottom:16px;}
+  .stack-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--c-empty);margin-bottom:14px;}
+  .stack-bar div{transition:width .5s ease;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 16px;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-dim);}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+  .date-nav{display:flex;align-items:center;gap:10px;margin-top:14px;}
+  .date-nav button{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .date-nav button:hover{background:var(--surface-3);}
+  .date-nav button:active{transform:scale(0.92);}
+  .date-nav .today-btn{width:auto;padding:0 12px;font-size:12px;color:var(--text-dim);font-family:'Inter';}
+
+  .tabs{display:flex;gap:4px;background:rgba(27,30,37,0.66);backdrop-filter:blur(14px);border:1px solid var(--line);padding:4px;border-radius:12px;margin-bottom:20px;width:fit-content;}
+  .tab{
+    padding:8px 18px;border-radius:9px;font-size:13.5px;font-weight:500;color:var(--text-dim);
+    cursor:pointer;transition:all .2s ease;font-family:'Inter';
+  }
+  .tab.active{background:var(--surface-3);color:var(--text);}
+  .tab:hover:not(.active){color:var(--text);}
+
+  .panel{
+    background:rgba(27,30,37,0.66);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:20px;padding:22px;
+    animation:fadein .25s ease;
+  }
+  @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  .hour-row{
+    display:grid;grid-template-columns:64px 1fr 132px 64px;gap:12px;align-items:center;
+    padding:9px 6px;border-radius:10px;transition:background .15s ease;
+  }
+  .hour-row:hover{background:var(--surface-2);}
+  .hour-label{font-family:'Space Grotesk',sans-serif;font-size:13px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
+  .hour-row input[type=text]{
+    background:var(--surface-2);border:1px solid transparent;color:var(--text);
+    padding:8px 10px;border-radius:8px;font-size:13.5px;font-family:'Inter';outline:none;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .hour-row input[type=text]:focus{border-color:var(--gold-dim);background:var(--surface-3);}
+  .hour-row input[type=text]::placeholder{color:var(--text-faint);}
+  .cat-select{
+    display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid transparent;
+    border-radius:8px;padding:7px 8px;cursor:pointer;font-size:12px;color:var(--text-dim);position:relative;
+  }
+  .cat-select select{
+    position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;
+  }
+  .mins-input{
+    background:var(--surface-2);border:1px solid transparent;color:var(--text-dim);
+    padding:8px 6px;border-radius:8px;font-size:12.5px;text-align:center;width:100%;outline:none;font-family:'Space Grotesk';
+  }
+  .mins-input:focus{border-color:var(--gold-dim);}
+
+  .empty-note{color:var(--text-faint);font-size:12.5px;padding:10px 6px 4px;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;}
+  .stat-card{background:rgba(36,40,50,0.7);border:1px solid var(--line);border-radius:14px;padding:16px;}
+  .stat-card .num{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;}
+  .stat-card .lbl{font-size:11.5px;color:var(--text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
+
+  .chart-row{display:flex;gap:20px;flex-wrap:wrap;}
+  .chart-box{flex:1;min-width:280px;background:rgba(36,40,50,0.7);border:1px solid var(--line);border-radius:16px;padding:18px;height:280px;}
+  .chart-box h4{margin:0 0 12px;font-size:12.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;font-weight:600;}
+
+  .loading{color:var(--text-faint);font-size:13px;padding:20px;text-align:center;}
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="bgGradient"></div>
+<canvas id="bgCanvas"></canvas>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">Hour<span>Wheel</span></div>
+    <div class="topbar-right">
+      <span class="vibe-label" id="vibeLabel"></span>
+      <button class="vibe-btn" id="vibeBtn">🎲 Shuffle vibe</button>
+      <div class="digital-time" id="digitalTime">--:--:--</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="clock-wrap">
+      <svg viewBox="0 0 300 300" id="clockSvg"></svg>
+    </div>
+    <div class="day-summary">
+      <div class="date-label" id="dateLabel">Today</div>
+      <div class="date-sub" id="dateSub"></div>
+      <div class="stack-bar" id="stackBar"></div>
+      <div class="legend" id="legend"></div>
+      <div class="date-nav">
+        <button id="prevDay">‹</button>
+        <button class="today-btn" id="gotoToday">Today</button>
+        <button id="nextDay">›</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="today">Daily</div>
+    <div class="tab" data-tab="weekly">Weekly</div>
+    <div class="tab" data-tab="monthly">Monthly</div>
+    <div class="tab" data-tab="yearly">Yearly</div>
+  </div>
+
+  <div id="panelHost"></div>
+
+</div>
+
+<script>
+/* ================= Anime-inspired ambient theme engine =================
+   Original moods (not tied to any specific show/character) rendered with
+   pure canvas particles + CSS gradients — safe, and free to keep forever. */
+const VIBES = [
+  { name:'Sakura Dusk', top:'#3a2a3f', bottom:'#1c1420', accent:'#f2a6c9', shape:'petal', count:34, dir:1, speed:0.35 },
+  { name:'Neon Tokyo', top:'#0d1b2e', bottom:'#0a0e17', accent:'#4fd8ff', shape:'line', count:26, dir:-1, speed:0.9, accent2:'#ff5fd1' },
+  { name:'Ghibli Meadow', top:'#233a33', bottom:'#141d1a', accent:'#bfe6a8', shape:'circle', count:24, dir:-1, speed:0.25 },
+  { name:'Shonen Sunrise', top:'#3e2418', bottom:'#1c120c', accent:'#ff9a4d', shape:'line', count:22, dir:-1, speed:1.1, accent2:'#ffe08a' },
+  { name:'Midnight Mecha', top:'#181c26', bottom:'#0e1015', accent:'#8fa6c9', shape:'hex', count:16, dir:1, speed:0.2 },
+  { name:'Pastel Slice-of-Life', top:'#332a3d', bottom:'#1a1620', accent:'#d9b8f0', shape:'circle', count:20, dir:-1, speed:0.2 },
+  { name:'Retro VHS', top:'#241a33', bottom:'#120e1a', accent:'#7fe8d0', shape:'line', count:18, dir:1, speed:0.6, accent2:'#ff7fb0' },
+  { name:'Starlit Fantasy', top:'#181430', bottom:'#0c0a18', accent:'#ffe9a8', shape:'star', count:40, dir:0, speed:0.05 },
+];
+
+let currentVibe = VIBES[Math.floor(Math.random()*VIBES.length)];
+let particles = [];
+const canvas = document.getElementById('bgCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function spawnParticles(vibe){
+  particles = [];
+  for(let i=0;i<vibe.count;i++){
+    particles.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height,
+      size: 2 + Math.random()* (vibe.shape==='petal'?7:vibe.shape==='hex'?10:vibe.shape==='line'?26:3),
+      speed: (0.3 + Math.random()*0.9) * vibe.speed,
+      sway: Math.random()*Math.PI*2,
+      rot: Math.random()*Math.PI*2,
+      twinkle: Math.random()*Math.PI*2,
+      color: (vibe.accent2 && Math.random()<0.5) ? vibe.accent2 : vibe.accent
+    });
+  }
+}
+
+function applyVibe(vibe){
+  currentVibe = vibe;
+  document.getElementById('bgGradient').style.background =
+    `linear-gradient(180deg, ${vibe.top} 0%, ${vibe.bottom} 70%)`;
+  document.getElementById('vibeLabel').textContent = vibe.name;
+  spawnParticles(vibe);
+}
+
+function drawParticle(p, shape){
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.rot);
+  ctx.fillStyle = p.color;
+  ctx.strokeStyle = p.color;
+  if(shape === 'petal'){
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.ellipse(0,0,p.size,p.size*0.55,0,0,Math.PI*2);
+    ctx.fill();
+  } else if(shape === 'circle'){
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.arc(0,0,p.size,0,Math.PI*2);
+    ctx.fill();
+  } else if(shape === 'line'){
+    ctx.globalAlpha = 0.4;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(0,0); ctx.lineTo(0,p.size);
+    ctx.stroke();
+  } else if(shape === 'hex'){
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a = i*Math.PI/3;
+      const px = Math.cos(a)*p.size, py = Math.sin(a)*p.size;
+      i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  } else if(shape === 'star'){
+    ctx.globalAlpha = 0.5 + 0.4*Math.sin(p.twinkle);
+    ctx.beginPath();
+    ctx.arc(0,0,p.size*0.6,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function animateBg(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const vibe = currentVibe;
+  particles.forEach(p=>{
+    if(vibe.shape === 'star'){
+      p.twinkle += 0.03;
+    } else {
+      p.sway += 0.02;
+      p.y -= p.speed * vibe.dir;
+      p.x += Math.sin(p.sway)*0.4;
+      p.rot += 0.004;
+      if(vibe.dir < 0 && p.y < -20){ p.y = canvas.height+20; p.x = Math.random()*canvas.width; }
+      if(vibe.dir > 0 && p.y > canvas.height+20){ p.y = -20; p.x = Math.random()*canvas.width; }
+    }
+    drawParticle(p, vibe.shape);
+  });
+  requestAnimationFrame(animateBg);
+}
+applyVibe(currentVibe);
+requestAnimationFrame(animateBg);
+
+document.getElementById('vibeBtn').addEventListener('click', ()=>{
+  let next = currentVibe;
+  while(next === currentVibe) next = VIBES[Math.floor(Math.random()*VIBES.length)];
+  applyVibe(next);
+});
+
+/* ---------------- Categories & keyword classifier ---------------- */
+const CATEGORIES = [
+  { id:'work',   label:'Work',      color:'var(--c-work)',   hex:'#E8B34D', kws:['work','meeting','email','code','coding','project','client','office','report','presentation','call','deadline','task','standup','review'] },
+  { id:'study',  label:'Study',     color:'var(--c-study)',  hex:'#6FA8E8', kws:['study','learn','class','course','read','reading','homework','exam','research','lecture','revise'] },
+  { id:'health', label:'Health',    color:'var(--c-health)', hex:'#6FCF97', kws:['gym','workout','run','running','exercise','yoga','walk','sport','training','meditation','stretch'] },
+  { id:'sleep',  label:'Sleep',     color:'var(--c-sleep)',  hex:'#8C7AE6', kws:['sleep','nap','rest'] },
+  { id:'chores', label:'Chores',    color:'var(--c-chores)', hex:'#E0956F', kws:['clean','cook','cooking','laundry','shop','groceries','dishes','chore','errand','tidy'] },
+  { id:'social', label:'Social',    color:'var(--c-social)', hex:'#4DB6AC', kws:['friend','family','dinner','party','hangout','date','chat with'] },
+  { id:'fun',    label:'Entertainment', color:'var(--c-fun)', hex:'#E06F9B', kws:['movie','netflix','game','gaming','tv','youtube','music','show','relax','scroll'] },
+  { id:'other',  label:'Other',     color:'var(--c-other)',  hex:'#6B7080', kws:[] },
+];
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+
+function classify(desc){
+  if(!desc || !desc.trim()) return null;
+  const d = desc.toLowerCase();
+  for(const cat of CATEGORIES){
+    for(const kw of cat.kws){ if(d.includes(kw)) return cat.id; }
+  }
+  return 'other';
+}
+
+/* ---------------- Date helpers ---------------- */
+function fmtDate(d){ // YYYY-MM-DD
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(s,n){ const d=parseDate(s); d.setDate(d.getDate()+n); return fmtDate(d); }
+function prettyDate(s){
+  const d = parseDate(s);
+  return d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric', year:'numeric'});
+}
+
+/* ---------------- Storage layer ---------------- */
+async function loadDay(dateStr){
+  try{
+    const res = await window.storage.get('day:'+dateStr, false);
+    if(res && res.value) return JSON.parse(res.value);
+  }catch(e){ /* not found */ }
+  return Array.from({length:24}, ()=>({desc:'', cat:null, mins:60}));
+}
+async function saveDay(dateStr, entries){
+  try{ await window.storage.set('day:'+dateStr, JSON.stringify(entries), false); }
+  catch(e){ console.error('save failed', e); }
+}
+async function listAllDayKeys(){
+  try{
+    const res = await window.storage.list('day:', false);
+    return res && res.keys ? res.keys : [];
+  }catch(e){ return []; }
+}
+
+/* ---------------- App state ---------------- */
+let currentDate = fmtDate(new Date());
+let currentEntries = [];
+let activeTab = 'today';
+let charts = {}; // chart.js instances to destroy on redraw
+
+/* ---------------- Live clock + ring ---------------- */
+function polar(cx,cy,r,angleDeg){
+  const a = (angleDeg-90) * Math.PI/180;
+  return { x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) };
+}
+function wedgePath(cx,cy,rInner,rOuter,startAngle,endAngle){
+  const p1 = polar(cx,cy,rOuter,startAngle);
+  const p2 = polar(cx,cy,rOuter,endAngle);
+  const p3 = polar(cx,cy,rInner,endAngle);
+  const p4 = polar(cx,cy,rInner,startAngle);
+  const large = (endAngle-startAngle) > 180 ? 1 : 0;
+  return `M ${p1.x} ${p1.y} A ${rOuter} ${rOuter} 0 ${large} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${rInner} ${rInner} 0 ${large} 0 ${p4.x} ${p4.y} Z`;
+}
+
+function buildClockSvg(){
+  const svg = document.getElementById('clockSvg');
+  let ticks = '';
+  for(let i=0;i<12;i++){
+    const p1 = polar(150,150,84,i*30);
+    const p2 = polar(150,150, i%3===0?74:79, i*30);
+    ticks += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#5C6270" stroke-width="${i%3===0?2.5:1.5}" stroke-linecap="round"/>`;
+  }
+  svg.innerHTML = `
+    <g id="ringWedges"></g>
+    <circle cx="150" cy="150" r="90" fill="#1B1E25" stroke="#33384433" stroke-width="1"/>
+    ${ticks}
+    <g id="nowMarker"></g>
+    <line class="hand hour" id="handHour" x1="150" y1="150" x2="150" y2="105"/>
+    <line class="hand minute" id="handMinute" x1="150" y1="150" x2="150" y2="90"/>
+    <line class="hand second" id="handSecond" x1="150" y1="150" x2="150" y2="85"/>
+    <circle class="hub" cx="150" cy="150" r="4.5"/>
+  `;
+}
+
+function renderRing(entries){
+  const g = document.getElementById('ringWedges');
+  if(!g) return;
+  let html = '';
+  for(let h=0; h<24; h++){
+    const e = entries[h];
+    const catId = e && e.desc && e.desc.trim() ? (e.cat || classify(e.desc)) : null;
+    const color = catId ? CAT_MAP[catId].hex : '#2A2E38';
+    const start = h*15, end = (h+1)*15;
+    html += `<path d="${wedgePath(150,150,100,130,start+1,end-1)}" fill="${color}" opacity="${catId?0.95:0.5}"/>`;
+  }
+  g.innerHTML = html;
+}
+
+function renderNowMarker(){
+  const now = new Date();
+  const frac = (now.getHours() + now.getMinutes()/60) / 24;
+  const angle = frac*360;
+  const p1 = polar(150,150,96,angle), p2 = polar(150,150,136,angle);
+  document.getElementById('nowMarker').innerHTML =
+    `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#EDEEF0" stroke-width="1.5" opacity="0.9"/>`;
+}
+
+function tickClock(){
+  const now = new Date();
+  const h = now.getHours()%12, m = now.getMinutes(), s = now.getSeconds();
+  document.getElementById('handHour').style.transform = `rotate(${h*30 + m*0.5}deg)`;
+  document.getElementById('handMinute').style.transform = `rotate(${m*6 + s*0.1}deg)`;
+  document.getElementById('handSecond').style.transform = `rotate(${s*6}deg)`;
+  document.getElementById('digitalTime').textContent = now.toLocaleTimeString();
+  if(currentDate === fmtDate(now)) renderNowMarker();
+}
+setInterval(tickClock, 1000);
+buildClockSvg();
+tickClock();
+
+/* ---------------- Day summary (stack bar + legend) ---------------- */
+function computeCategoryTotals(entriesList){
+  const totals = {};
+  CATEGORIES.forEach(c=>totals[c.id]=0);
+  entriesList.forEach(e=>{
+    if(e && e.desc && e.desc.trim()){
+      const cat = e.cat || classify(e.desc);
+      totals[cat] += (e.mins ?? 60);
+    }
+  });
+  return totals;
+}
+
+function renderDaySummary(entries){
+  document.getElementById('dateLabel').textContent =
+    currentDate === fmtDate(new Date()) ? 'Today' : prettyDate(currentDate);
+  document.getElementById('dateSub').textContent = prettyDate(currentDate);
+
+  const totals = computeCategoryTotals(entries);
+  const totalMins = Object.values(totals).reduce((a,b)=>a+b,0);
+  const bar = document.getElementById('stackBar');
+  const legend = document.getElementById('legend');
+  bar.innerHTML = '';
+  legend.innerHTML = '';
+  if(totalMins === 0){
+    bar.innerHTML = `<div style="width:100%;background:var(--c-empty);"></div>`;
+    legend.innerHTML = `<span class="legend-item">No entries logged yet</span>`;
+    return;
+  }
+  CATEGORIES.forEach(c=>{
+    if(totals[c.id] > 0){
+      const pct = (totals[c.id]/1440*100).toFixed(1);
+      bar.innerHTML += `<div style="width:${pct}%;background:${c.hex};"></div>`;
+      const hrs = (totals[c.id]/60).toFixed(1);
+      legend.innerHTML += `<span class="legend-item"><span class="dot" style="background:${c.hex}"></span>${c.label} · ${hrs}h</span>`;
+    }
+  });
+}
+
+/* ---------------- Daily panel (hour rows) ---------------- */
+function catOptionsHtml(selected){
+  return CATEGORIES.map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${c.label}</option>`).join('');
+}
+
+function renderDailyPanel(){
+  const host = document.getElementById('panelHost');
+  let rows = '';
+  for(let h=0; h<24; h++){
+    const e = currentEntries[h] || {desc:'',cat:null,mins:60};
+    const autoCat = e.desc && e.desc.trim() ? (e.cat || classify(e.desc)) : null;
+    const color = autoCat ? CAT_MAP[autoCat].hex : '#5C6270';
+    const label = String(h).padStart(2,'0')+':00';
+    rows += `
+      <div class="hour-row" data-hour="${h}">
+        <div class="hour-label">${label}</div>
+        <input type="text" placeholder="What did you do?" value="${(e.desc||'').replace(/"/g,'&quot;')}" data-field="desc" data-hour="${h}">
+        <div class="cat-select" style="color:${color}">
+          <span class="dot" style="background:${color};width:7px;height:7px;border-radius:50%;display:inline-block;"></span>
+          <span>${autoCat ? CAT_MAP[autoCat].label : '—'}</span>
+          <select data-field="cat" data-hour="${h}">
+            <option value="">Auto</option>
+            ${catOptionsHtml(e.cat)}
+          </select>
+        </div>
+        <input type="number" class="mins-input" min="0" max="60" value="${e.mins ?? 60}" data-field="mins" data-hour="${h}">
+      </div>`;
+  }
+  host.innerHTML = `<div class="panel">${rows}</div>`;
+
+  host.querySelectorAll('[data-field]').forEach(el=>{
+    el.addEventListener('input', onFieldChange);
+    el.addEventListener('change', onFieldChange);
+  });
+}
+
+let saveTimer = null;
+function onFieldChange(ev){
+  const el = ev.target;
+  const h = Number(el.dataset.hour);
+  const field = el.dataset.field;
+  if(!currentEntries[h]) currentEntries[h] = {desc:'',cat:null,mins:60};
+  if(field === 'desc') currentEntries[h].desc = el.value;
+  if(field === 'cat') currentEntries[h].cat = el.value || null;
+  if(field === 'mins') currentEntries[h].mins = Math.max(0, Math.min(60, Number(el.value)||0));
+
+  renderDaySummary(currentEntries);
+  renderRing(currentEntries);
+  renderDailyPanel_partialUpdate(h);
+
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>saveDay(currentDate, currentEntries), 400);
+}
+
+function renderDailyPanel_partialUpdate(h){
+  // update just the row's color/label without losing input focus
+  const row = document.querySelector(`.hour-row[data-hour="${h}"]`);
+  if(!row) return;
+  const e = currentEntries[h];
+  const autoCat = e.desc && e.desc.trim() ? (e.cat || classify(e.desc)) : null;
+  const color = autoCat ? CAT_MAP[autoCat].hex : '#5C6270';
+  const catBox = row.querySelector('.cat-select');
+  catBox.style.color = color;
+  catBox.querySelector('.dot').style.background = color;
+  catBox.querySelector('span:nth-child(2)').textContent = autoCat ? CAT_MAP[autoCat].label : '—';
+}
+
+/* ---------------- Aggregation for weekly/monthly/yearly ---------------- */
+async function fetchRangeData(startDate, endDate){
+  const allKeys = await listAllDayKeys();
+  const wanted = new Set();
+  let d = startDate;
+  while(d <= endDate){ wanted.add('day:'+d); d = addDays(d,1); }
+  const relevantKeys = allKeys.filter(k=>wanted.has(k));
+  const data = {};
+  for(const key of relevantKeys){
+    try{
+      const res = await window.storage.get(key, false);
+      if(res && res.value) data[key.replace('day:','')] = JSON.parse(res.value);
+    }catch(e){}
+  }
+  return data; // {dateStr: entries[24]}
+}
+
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+function catDatasetColors(){ return CATEGORIES.map(c=>c.hex); }
+
+async function renderWeekly(){
+  const host = document.getElementById('panelHost');
+  host.innerHTML = `<div class="panel"><div class="loading">Loading weekly data…</div></div>`;
+  const end = currentDate;
+  const start = addDays(end, -6);
+  const data = await fetchRangeData(start, end);
+
+  const days = [];
+  let d = start;
+  while(d <= end){ days.push(d); d = addDays(d,1); }
+
+  const catTotalsPerDay = days.map(ds=>{
+    const entries = data[ds] || [];
+    return computeCategoryTotals(entries);
+  });
+  let totalMins = 0;
+  const grandTotals = {}; CATEGORIES.forEach(c=>grandTotals[c.id]=0);
+  catTotalsPerDay.forEach(t=>CATEGORIES.forEach(c=>{ grandTotals[c.id]+=t[c.id]; totalMins+=t[c.id]; }));
+
+  const avgHrs = (totalMins/60/7).toFixed(1);
+  const topCat = Object.entries(grandTotals).sort((a,b)=>b[1]-a[1])[0];
+
+  host.innerHTML = `
+    <div class="panel">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="num">${(totalMins/60).toFixed(1)}h</div><div class="lbl">Tracked this week</div></div>
+        <div class="stat-card"><div class="num">${avgHrs}h</div><div class="lbl">Avg per day</div></div>
+        <div class="stat-card"><div class="num">${topCat && topCat[1]>0 ? CAT_MAP[topCat[0]].label : '—'}</div><div class="lbl">Top category</div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-box"><h4>Hours by day, by category</h4><canvas id="weeklyBar"></canvas></div>
+        <div class="chart-box"><h4>Category split (week)</h4><canvas id="weeklyDonut"></canvas></div>
+      </div>
+    </div>`;
+
+  destroyChart('weeklyBar'); destroyChart('weeklyDonut');
+  const ctxBar = document.getElementById('weeklyBar');
+  charts.weeklyBar = new Chart(ctxBar, {
+    type:'bar',
+    data:{
+      labels: days.map(ds=>parseDate(ds).toLocaleDateString(undefined,{weekday:'short'})),
+      datasets: CATEGORIES.map(c=>({
+        label:c.label, backgroundColor:c.hex,
+        data: catTotalsPerDay.map(t=>+(t[c.id]/60).toFixed(2))
+      }))
+    },
+    options: chartOptions(true)
+  });
+  const ctxDonut = document.getElementById('weeklyDonut');
+  charts.weeklyDonut = new Chart(ctxDonut, {
+    type:'doughnut',
+    data:{ labels:CATEGORIES.map(c=>c.label), datasets:[{ data:CATEGORIES.map(c=>+(grandTotals[c.id]/60).toFixed(2)), backgroundColor:catDatasetColors(), borderWidth:0 }] },
+    options: donutOptions()
+  });
+}
+
+async function renderMonthly(){
+  const host = document.getElementById('panelHost');
+  host.innerHTML = `<div class="panel"><div class="loading">Loading monthly data…</div></div>`;
+  const ref = parseDate(currentDate);
+  const year = ref.getFullYear(), month = ref.getMonth();
+  const start = fmtDate(new Date(year, month, 1));
+  const end = fmtDate(new Date(year, month+1, 0));
+  const data = await fetchRangeData(start, end);
+
+  const days = [];
+  let d = start;
+  while(d <= end){ days.push(d); d = addDays(d,1); }
+
+  const dailyTotals = days.map(ds=>{
+    const entries = data[ds] || [];
+    return Object.values(computeCategoryTotals(entries)).reduce((a,b)=>a+b,0);
+  });
+  const grandTotals = {}; CATEGORIES.forEach(c=>grandTotals[c.id]=0);
+  days.forEach(ds=>{
+    const t = computeCategoryTotals(data[ds]||[]);
+    CATEGORIES.forEach(c=>grandTotals[c.id]+=t[c.id]);
+  });
+  const totalMins = Object.values(grandTotals).reduce((a,b)=>a+b,0);
+  const daysLogged = dailyTotals.filter(m=>m>0).length;
+  const topCat = Object.entries(grandTotals).sort((a,b)=>b[1]-a[1])[0];
+
+  host.innerHTML = `
+    <div class="panel">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="num">${(totalMins/60).toFixed(1)}h</div><div class="lbl">Tracked this month</div></div>
+        <div class="stat-card"><div class="num">${daysLogged}/${days.length}</div><div class="lbl">Days logged</div></div>
+        <div class="stat-card"><div class="num">${topCat && topCat[1]>0 ? CAT_MAP[topCat[0]].label : '—'}</div><div class="lbl">Top category</div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-box" style="flex:2;"><h4>Hours per day</h4><canvas id="monthlyLine"></canvas></div>
+        <div class="chart-box"><h4>Category split (month)</h4><canvas id="monthlyDonut"></canvas></div>
+      </div>
+    </div>`;
+
+  destroyChart('monthlyLine'); destroyChart('monthlyDonut');
+  charts.monthlyLine = new Chart(document.getElementById('monthlyLine'), {
+    type:'line',
+    data:{ labels: days.map(ds=>parseDate(ds).getDate()), datasets:[{
+      label:'Hours', data: dailyTotals.map(m=>+(m/60).toFixed(2)),
+      borderColor:'#E8B34D', backgroundColor:'rgba(232,179,77,0.12)', fill:true, tension:0.35, pointRadius:2
+    }]},
+    options: chartOptions(false)
+  });
+  charts.monthlyDonut = new Chart(document.getElementById('monthlyDonut'), {
+    type:'doughnut',
+    data:{ labels:CATEGORIES.map(c=>c.label), datasets:[{ data:CATEGORIES.map(c=>+(grandTotals[c.id]/60).toFixed(2)), backgroundColor:catDatasetColors(), borderWidth:0 }] },
+    options: donutOptions()
+  });
+}
+
+async function renderYearly(){
+  const host = document.getElementById('panelHost');
+  host.innerHTML = `<div class="panel"><div class="loading">Loading yearly data…</div></div>`;
+  const ref = parseDate(currentDate);
+  const year = ref.getFullYear();
+  const start = fmtDate(new Date(year,0,1));
+  const end = fmtDate(new Date(year,11,31));
+  const data = await fetchRangeData(start, end);
+
+  const monthTotals = Array.from({length:12}, ()=>0);
+  const grandTotals = {}; CATEGORIES.forEach(c=>grandTotals[c.id]=0);
+  Object.entries(data).forEach(([ds, entries])=>{
+    const m = parseDate(ds).getMonth();
+    const t = computeCategoryTotals(entries);
+    Object.values(t).forEach(v=>monthTotals[m]+=v);
+    CATEGORIES.forEach(c=>grandTotals[c.id]+=t[c.id]);
+  });
+  const totalMins = Object.values(grandTotals).reduce((a,b)=>a+b,0);
+  const topCat = Object.entries(grandTotals).sort((a,b)=>b[1]-a[1])[0];
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  host.innerHTML = `
+    <div class="panel">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="num">${(totalMins/60).toFixed(0)}h</div><div class="lbl">Tracked in ${year}</div></div>
+        <div class="stat-card"><div class="num">${(totalMins/60/12).toFixed(1)}h</div><div class="lbl">Avg per month</div></div>
+        <div class="stat-card"><div class="num">${topCat && topCat[1]>0 ? CAT_MAP[topCat[0]].label : '—'}</div><div class="lbl">Top category</div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-box" style="flex:2;"><h4>Hours per month</h4><canvas id="yearlyBar"></canvas></div>
+        <div class="chart-box"><h4>Category split (year)</h4><canvas id="yearlyDonut"></canvas></div>
+      </div>
+    </div>`;
+
+  destroyChart('yearlyBar'); destroyChart('yearlyDonut');
+  charts.yearlyBar = new Chart(document.getElementById('yearlyBar'), {
+    type:'bar',
+    data:{ labels: monthNames, datasets:[{ label:'Hours', data: monthTotals.map(m=>+(m/60).toFixed(1)), backgroundColor:'#E8B34D', borderRadius:4 }] },
+    options: chartOptions(false)
+  });
+  charts.yearlyDonut = new Chart(document.getElementById('yearlyDonut'), {
+    type:'doughnut',
+    data:{ labels:CATEGORIES.map(c=>c.label), datasets:[{ data:CATEGORIES.map(c=>+(grandTotals[c.id]/60).toFixed(2)), backgroundColor:catDatasetColors(), borderWidth:0 }] },
+    options: donutOptions()
+  });
+}
+
+function chartOptions(stacked){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ display: stacked, labels:{ color:'#9296A0', boxWidth:10, font:{size:10.5} } } },
+    scales:{
+      x:{ stacked, ticks:{ color:'#9296A0', font:{size:10.5} }, grid:{ color:'#2E323D' } },
+      y:{ stacked, ticks:{ color:'#9296A0', font:{size:10.5} }, grid:{ color:'#2E323D' } }
+    }
+  };
+}
+function donutOptions(){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'bottom', labels:{ color:'#9296A0', boxWidth:9, font:{size:10} } } },
+    cutout:'62%'
+  };
+}
+
+/* ---------------- Tab / navigation wiring ---------------- */
+async function renderActiveTab(){
+  if(activeTab === 'today'){ renderDailyPanel(); }
+  else if(activeTab === 'weekly'){ await renderWeekly(); }
+  else if(activeTab === 'monthly'){ await renderMonthly(); }
+  else if(activeTab === 'yearly'){ await renderYearly(); }
+}
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', async ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    activeTab = tab.dataset.tab;
+    await renderActiveTab();
+  });
+});
+
+document.getElementById('prevDay').addEventListener('click', async ()=>{
+  currentDate = addDays(currentDate, -1);
+  await loadAndRenderDay();
+});
+document.getElementById('nextDay').addEventListener('click', async ()=>{
+  currentDate = addDays(currentDate, 1);
+  await loadAndRenderDay();
+});
+document.getElementById('gotoToday').addEventListener('click', async ()=>{
+  currentDate = fmtDate(new Date());
+  await loadAndRenderDay();
+});
+
+async function loadAndRenderDay(){
+  currentEntries = await loadDay(currentDate);
+  renderDaySummary(currentEntries);
+  renderRing(currentEntries);
+  renderNowMarker();
+  if(activeTab === 'today') renderDailyPanel();
+  else await renderActiveTab();
+}
+
+/* ---------------- Init ---------------- */
+(async function init(){
+  await loadAndRenderDay();
+})();
+</script>
+</body>
+</html>
